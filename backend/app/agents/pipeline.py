@@ -1,5 +1,7 @@
 """deepagents 기반 리서치 파이프라인 팩토리."""
 from langchain_openai import ChatOpenAI
+from langchain_core.outputs import ChatGenerationChunk
+from langchain_core.messages import AIMessageChunk
 
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
@@ -9,6 +11,50 @@ from app.agents.tools.retrieval import make_vector_search_tool
 from app.agents.tools.outline import make_write_slide_outline_tool
 from app.agents.tools.think import think_tool
 from app.core.config import settings
+
+
+class ReasoningChatOpenAI(ChatOpenAI):
+    """GLM-4.7 등 delta['reasoning'] 필드를 반환하는 모델용 ChatOpenAI 래퍼.
+
+    LangChain이 기본적으로 무시하는 reasoning 필드를
+    AIMessageChunk.additional_kwargs['reasoning']으로 전달한다.
+    """
+
+    def _convert_chunk_to_generation_chunk(
+        self,
+        chunk: dict,
+        default_chunk_class: type,
+        base_generation_info: dict | None,
+    ) -> ChatGenerationChunk | None:
+        gen = super()._convert_chunk_to_generation_chunk(
+            chunk, default_chunk_class, base_generation_info
+        )
+        if gen is None:
+            return None
+
+        choices = chunk.get("choices") or chunk.get("chunk", {}).get("choices") or []
+        if choices:
+            delta = choices[0].get("delta") or {}
+            reasoning = delta.get("reasoning") or ""
+            if reasoning and isinstance(gen.message, AIMessageChunk):
+                gen.message.additional_kwargs["reasoning"] = reasoning
+
+        return gen
+
+
+def _build_model() -> ChatOpenAI:
+    """설정된 모델명에 따라 적절한 ChatOpenAI 인스턴스를 반환한다.
+
+    GLM 계열 모델이면 ReasoningChatOpenAI를 사용한다.
+    """
+    kwargs = dict(
+        model=settings.openai_model,
+        openai_api_key=settings.openai_api_key,
+        temperature=0.0,
+        **({"openai_api_base": settings.openai_base_url} if settings.openai_base_url else {}),
+    )
+    cls = ReasoningChatOpenAI if "glm" in settings.openai_model.lower() else ChatOpenAI
+    return cls(**kwargs)
 
 
 def create_research_pipeline(source_ids: list[str], job_dir: str):
@@ -21,12 +67,7 @@ def create_research_pipeline(source_ids: list[str], job_dir: str):
     Returns:
         컴파일된 LangGraph 그래프 (deepagents agent)
     """
-    model = ChatOpenAI(
-        model=settings.openai_model,
-        openai_api_key=settings.openai_api_key,
-        temperature=0.0,
-        **({"openai_api_base": settings.openai_base_url} if settings.openai_base_url else {}),
-    )
+    model = _build_model()
 
     # source_ids가 바인딩된 vector_search 도구
     vector_search = make_vector_search_tool(source_ids)
