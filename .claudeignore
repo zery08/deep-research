@@ -1,0 +1,22 @@
+# 패키지 의존성
+node_modules/
+vendor/
+.venv/
+
+# 빌드 결과물
+dist/
+build/
+*.min.js
+*.min.css
+
+# 바이너리 및 미디어
+*.png
+*.jpg
+*.gif
+*.mp4
+*.pdf
+
+# 로그 및 임시 파일
+*.log
+tmp/
+.cache/

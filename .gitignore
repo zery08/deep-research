@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+
+# Env files
+.env
+*.env
+
+# Data (업로드 파일, 벡터DB, 잡 결과물)
+backend/data/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.next/
+
+# IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Logs
+*.log
